@@ -81,6 +81,23 @@ def gist_save(tokens: dict):
 
 # ---------------- Telegram ----------------
 
+def get_wallet(access: str):
+    """查钱包余额，返回 (balance, total_earned) 或 (None, None)。"""
+    try:
+        r = requests.post(
+            AUTH_FN,
+            headers={**HEADERS_BASE, "authorization": f"Bearer {access}"},
+            json={"action": "wallet"},
+            timeout=20,
+        )
+        if r.status_code == 200:
+            w = r.json().get("wallet", {})
+            return w.get("balance"), w.get("total_earned")
+    except Exception as e:
+        print(f"⚠️ 查钱包失败: {e}")
+    return None, None
+
+
 def notify(text: str):
     bot_token = os.environ.get("TG_BOT_TOKEN", "").strip()
     chat_id = os.environ.get("TG_CHAT_ID", "").strip()
@@ -211,18 +228,23 @@ def main():
         token_line = f"Token 已刷新，有效期还剩 {exp_left // 60} 分钟"
     else:
         token_line = f"Token 正常，有效期还剩 {exp_left // 60} 分钟"
+    # 查一次钱包余额，通知里带上
+    balance, _total = get_wallet(access)
+    balance_line = f"当前余额：<b>{balance}</b> boxes" if balance is not None else ""
 
     if data.get("error") == "ALREADY_SIGNED_IN":
         msg = (
             "✅ <b>FurryBox 签到检查完成</b>\n"
             "今日已签到，无需重复操作。\n"
+            f"{balance_line}\n"
             f"{token_line}"
         )
         print(msg); notify(msg); return 0
 
     if resp.status_code in (200, 201, 204) and not data.get("error"):
         reward = data.get("reward") or data.get("boxes") or 5
-        balance = data.get("balance") or data.get("total") or "?"
+        if balance is None:
+            balance = data.get("balance") or data.get("total") or "?"
         msg = (
             "✅ <b>FurryBox 签到成功</b>\n"
             f"本次奖励：<b>{reward}</b> boxes\n"
