@@ -170,6 +170,7 @@ def main():
     now = int(time.time())
     exp = jwt_exp(access) if access else 0
     print(f"当前 access_token exp={exp}, now={now}, 剩余 {exp - now} 秒")
+    refreshed = False
 
     if exp - now < 86400:
         if not refresh:
@@ -186,6 +187,7 @@ def main():
             print(msg); notify(msg); return 1
         access, refresh = new["access_token"], new["refresh_token"]
         gist_save({"access_token": access, "refresh_token": refresh})
+        refreshed = True
         print(f"✅ 刷新成功，新 exp 剩余 {jwt_exp(access) - int(time.time())} 秒")
 
     # 3. 签到
@@ -203,8 +205,19 @@ def main():
         data = {}
 
     # 4. 判定结果 + 通知
+    # token 状态行：让每条通知都能看出本次运行干了什么
+    exp_left = jwt_exp(access) - int(time.time())
+    if refreshed:
+        token_line = f"Token 已刷新，有效期还剩 {exp_left // 60} 分钟"
+    else:
+        token_line = f"Token 正常，有效期还剩 {exp_left // 60} 分钟"
+
     if data.get("error") == "ALREADY_SIGNED_IN":
-        msg = "ℹ️ <b>FurryBox</b>\n今日已签到，无需重复操作。"
+        msg = (
+            "✅ <b>FurryBox 签到检查完成</b>\n"
+            "今日已签到，无需重复操作。\n"
+            f"{token_line}"
+        )
         print(msg); notify(msg); return 0
 
     if resp.status_code in (200, 201, 204) and not data.get("error"):
@@ -213,7 +226,8 @@ def main():
         msg = (
             "✅ <b>FurryBox 签到成功</b>\n"
             f"本次奖励：<b>{reward}</b> boxes\n"
-            f"当前余额：<b>{balance}</b> boxes"
+            f"当前余额：<b>{balance}</b> boxes\n"
+            f"{token_line}"
         )
         print(msg); notify(msg); return 0
 
